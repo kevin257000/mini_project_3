@@ -113,11 +113,13 @@ int get_value(Board b) {
 int build_tree(Node *node, int depth, int A, int B, int cur_player) {
     // with Alpha-Beta Pruning
     node->value = get_value(node->state);
-    if(depth == 0 || node->child_num == 0) return node->value;
+    if(depth == 0) return node->value;
     vector<Point> valid_spots = get_valid_spots(node->state, cur_player);
     if(cur_player == BLACK) {
         int value = -MAX;
-        for(auto p:valid_spots) {
+        int spot_num = valid_spots.size();
+        for(int i=0;i<spot_num;i++) {
+            Point p = valid_spots[i];
             Board b = node->state;
             b[p.x][p.y] = cur_player;
             Node *child = new Node(b, p);
@@ -129,7 +131,9 @@ int build_tree(Node *node, int depth, int A, int B, int cur_player) {
         return value;
     }else {
         int value = MAX;
-        for(auto p:valid_spots) {
+        int spot_num = valid_spots.size();
+        for(int i=0;i<spot_num;i++) {
+            Point p = valid_spots[i];
             Board b = node->state;
             b[p.x][p.y] = cur_player;
             Node *child = new Node(b, p);
@@ -184,29 +188,24 @@ void write_valid_spot(std::ofstream& fout) {
     int n_valid_spots = next_valid_spots.size();
     bool flag = true;
     for(int i=0;i<head->child_num;i++) {
+        temp<<i<<endl;
         int t = minimax_search(head->childs[i], 5, BLACK);
         if(t >= value) {
             value = t;
             Point p(head->childs[i]->x,head->childs[i]->y);
-            //for(int i=0;i<n_valid_spots;i++) {
-                //Point valid_p = next_valid_spots[i];
-                //if(valid_p == p) {
+            for(int i=0;i<n_valid_spots;i++) {
+                Point valid_p = next_valid_spots[i];
+                if(valid_p == p) {
                     fout << p.x << " " << p.y << endl;
                     fout.flush();
                     flag = false;
                     temp << p.x << " " << p.y << endl;
                     temp.flush();
-                //}
-            //}
+                }
+            }
         }
     }
-    temp.close();//
-    if(flag){
-        Point p = next_valid_spots[0];
-        // Remember to flush the output to ensure the last action is written to file.
-        fout << p.x << " " << p.y << std::endl;
-        fout.flush();
-    }
+    temp.close();
 }
 
 int main(int, char** argv) {
