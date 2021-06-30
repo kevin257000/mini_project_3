@@ -46,7 +46,7 @@ struct Node {
     int value, child_num;
     int x, y;
     Board state;
-    Node *childs[64];
+    Node *childs[640];
     Node(Board s): child_num(0) {state = s;};
     Node(Board s, Point p): child_num(0), x(p.x), y(p.y){state = s;};
 };
@@ -93,38 +93,76 @@ vector<Point> get_valid_spots(Board b, int cur_player) {
     return valid_spots;
 }
 
-int get_value(Board b) {
-    int value = 0;
+int get_value(Board b, int x, int y, int cur_player) {
+    int value = 0, m = cur_player;
     for(int i=0;i<SIZE;i++)for(int j=0;j<SIZE;j++) {
-        if(i == 0 || j == 0 || i == SIZE-1 || j == SIZE-1) {
-            if(b[i][j] == BLACK) value += 5;
-            if(b[i][j] == WHITE) value -= 5;
-        } else if(i == 1 || j == 1 || i == SIZE-2 || j == SIZE-2) {
-            if(b[i][j] == BLACK) value -= 2;
-            if(b[i][j] == WHITE) value += 2;
+        if((i == 0 || i == SIZE-1) && (j == 0 || j == SIZE-1)) {//角落
+            if(b[i][j] == player) value += 50;
+            if(b[i][j] == 3-player) value -= 50;
+        } else if(i == 0 || j == 0 || i == SIZE-1 || j == SIZE-1) {//外圍
+            if(b[i][j] == player) value += 10;
+            if(b[i][j] == 3-player) value -= 10;
+        } else if((i == 1 || i == SIZE-2) && (j == 1 || j == SIZE-2)) {//次角落
+            if(b[i][j] == player) value -= 10;
+            if(b[i][j] == 3-player) value += 10;
+        } else if(i == 1 || j == 1 || i == SIZE-2 || j == SIZE-2) {//次外圍
+            if(b[i][j] == player) value -= 2;
+            if(b[i][j] == 3-player) value += 2;
         } else {
-            if(b[i][j] == BLACK) value += 1;
-            if(b[i][j] == WHITE) value -= 1;
+            if(b[i][j] == player) value += 1;
+            if(b[i][j] == 3-player) value -= 1;
+            if(x == i && y == j) m = 1;
         }
     }
+    /*
+    const int score[8][8] = {
+        {50,10,10,10,10,10,10,50},
+        {10,-10,1,1,1,1,-10,10},
+        {10,1,1,1,1,1,1,10},
+        {10,1,1,1,1,1,1,10},
+        {10,1,1,1,1,1,1,10},
+        {10,1,1,1,1,1,1,10},
+        {10,-10,1,1,1,1,-10,10},
+        {50,10,10,10,10,10,10,50},
+    };
+    value = 0;
+    for(int i=0;i<SIZE;i++)for(int j=0;j<SIZE;j++) {
+        if(b[i][j] == player) value += score[i][j];
+        if(b[i][j] == 3-player) value -= score[i][j];}
+     */
     return value;
 }
-
+Board flip(Board b, Point p, int cur_player) {
+    b[p.x][p.y] = cur_player;
+    Point t = p;
+    for (Point dir: directions) {//flip
+        t = p;
+        while (is_spot_on_board(t) && get_disc(b,t) != EMPTY) {
+            if (is_disc_at(b, t, cur_player)) {
+                t = p;
+                while (is_spot_on_board(t) && get_disc(b,t) != EMPTY && !is_disc_at(b, t, cur_player)) {
+                    b[t.x][t.y] = cur_player;
+                    t = t + dir;
+                }
+                break;
+            }
+            t = t + dir;
+        }
+    }
+    return b;
+}
 int build_tree(Node *node, int depth, int A, int B, int cur_player) {
     // with Alpha-Beta Pruning
-    node->value = get_value(node->state);
+    node->value = get_value(node->state, node->x, node->y, cur_player);
     if(depth == 0) return node->value;
     vector<Point> valid_spots = get_valid_spots(node->state, cur_player);
-    if(cur_player == BLACK) {
+    if(cur_player == player) {
         int value = -MAX;
         int spot_num = valid_spots.size();
         for(int i=0;i<spot_num;i++) {
-            Point p = valid_spots[i];
-            Board b = node->state;
-            b[p.x][p.y] = cur_player;
-            Node *child = new Node(b, p);
+            Node *child = new Node(flip(node->state, valid_spots[i], cur_player), valid_spots[i]);
             node->childs[node->child_num++] = child;
-            value = max(value, build_tree(child, depth-1, A, B, WHITE));
+            value = max(value, build_tree(child, depth-1, A, B, 3-player));
             A = max(A, value);
             if(A >= B) break;
         }
@@ -133,11 +171,9 @@ int build_tree(Node *node, int depth, int A, int B, int cur_player) {
         int value = MAX;
         int spot_num = valid_spots.size();
         for(int i=0;i<spot_num;i++) {
-            Point p = valid_spots[i];
-            Board b = node->state;
-            b[p.x][p.y] = cur_player;
-            Node *child = new Node(b, p);
-            value = min(value, build_tree(child, depth-1, A, B, BLACK));
+            Node *child = new Node(flip(node->state, valid_spots[i], cur_player), valid_spots[i]);
+            node->childs[node->child_num++] = child;
+            value = min(value, build_tree(child, depth-1, A, B, player));
             B = min(B, value);
             if(B <= A) break;
         }
@@ -147,15 +183,15 @@ int build_tree(Node *node, int depth, int A, int B, int cur_player) {
 
 int minimax_search(Node *node, int depth, int cur_player) {
     if(depth == 0 || node->child_num == 0) return node->value;
-    if(cur_player == BLACK) {
+    if(cur_player == player) {
         int value = -MAX;
         for(int i=0;i<node->child_num;i++)
-            value = max(value, minimax_search(node->childs[i], depth-1, WHITE));
+            value = max(value, minimax_search(node->childs[i], depth-1, 3-cur_player));
         return value;
     } else {
         int value = MAX;
         for(int i=0;i<node->child_num;i++)
-            value = min(value, minimax_search(node->childs[i], depth-1, BLACK));
+            value = min(value, minimax_search(node->childs[i], depth-1, 3-cur_player));
         return value;
     }
 }
@@ -183,22 +219,29 @@ void read_valid_spots(std::ifstream& fin) {
 void write_valid_spot(std::ofstream& fout) {
     ofstream temp("test");
     
+    fout << next_valid_spots[0].x << " " << next_valid_spots[0].y << endl;
+    fout.flush();
     
     int value = -MAX;
     int n_valid_spots = next_valid_spots.size();
-    bool flag = true;
+    temp<< "next_valid_spots : "<<endl;temp.flush();
+    for(int i=0;i<n_valid_spots;i++) {
+        Point p = next_valid_spots[i];
+        temp << p.x << " " << p.y << endl;temp.flush();
+    }temp<< "end "<<endl;temp.flush();
     for(int i=0;i<head->child_num;i++) {
         temp<<i<<endl;
-        int t = minimax_search(head->childs[i], 5, BLACK);
+        int t = minimax_search(head->childs[i], 5, player);
+        Point p(head->childs[i]->x,head->childs[i]->y);
+        if((p.x == 0 || p.x == SIZE-1) && (p.y == 0 || p.y == SIZE-1))
+            t *= 50;
         if(t >= value) {
             value = t;
-            Point p(head->childs[i]->x,head->childs[i]->y);
             for(int i=0;i<n_valid_spots;i++) {
                 Point valid_p = next_valid_spots[i];
                 if(valid_p == p) {
                     fout << p.x << " " << p.y << endl;
                     fout.flush();
-                    flag = false;
                     temp << p.x << " " << p.y << endl;
                     temp.flush();
                 }
@@ -214,7 +257,7 @@ int main(int, char** argv) {
     read_board(fin);
     read_valid_spots(fin);
     head = new Node(board);
-    build_tree(head, 3, -MAX, MAX, BLACK);
+    build_tree(head, 5, -MAX, MAX, player);
     write_valid_spot(fout);
     fin.close();
     fout.close();
